@@ -1,0 +1,24 @@
+CREATE TABLE roles (id UUID PRIMARY KEY, name VARCHAR(30) NOT NULL UNIQUE);
+CREATE TABLE permissions (id UUID PRIMARY KEY, name VARCHAR(80) NOT NULL UNIQUE);
+CREATE TABLE role_permissions (role_id UUID NOT NULL REFERENCES roles(id), permission_id UUID NOT NULL REFERENCES permissions(id), PRIMARY KEY(role_id, permission_id));
+CREATE TABLE users (id UUID PRIMARY KEY, name VARCHAR(150) NOT NULL, email VARCHAR(180) NOT NULL UNIQUE, password_hash VARCHAR(255) NOT NULL, enabled BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE user_roles (user_id UUID NOT NULL REFERENCES users(id), role_id UUID NOT NULL REFERENCES roles(id), PRIMARY KEY(user_id, role_id));
+CREATE TABLE refresh_tokens (id UUID PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id), token_hash VARCHAR(64) NOT NULL UNIQUE, expires_at TIMESTAMPTZ NOT NULL, revoked_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE tags (id UUID PRIMARY KEY, name VARCHAR(60) NOT NULL UNIQUE, color VARCHAR(9));
+CREATE TABLE customers (id UUID PRIMARY KEY, type VARCHAR(20) NOT NULL, name VARCHAR(180) NOT NULL, document VARCHAR(20) UNIQUE, email VARCHAR(180), phone VARCHAR(30), address VARCHAR(500), notes TEXT, owner_id UUID REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, created_by VARCHAR(180), updated_by VARCHAR(180), version BIGINT NOT NULL DEFAULT 0);
+CREATE TABLE customer_tags (customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE, tag_id UUID NOT NULL REFERENCES tags(id), PRIMARY KEY(customer_id,tag_id));
+CREATE TABLE contacts (id UUID PRIMARY KEY, customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE, name VARCHAR(150) NOT NULL, job_title VARCHAR(100), phone VARCHAR(30), email VARCHAR(180), primary_contact BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE leads (id UUID PRIMARY KEY, name VARCHAR(180) NOT NULL, email VARCHAR(180), phone VARCHAR(30), source VARCHAR(80), temperature VARCHAR(20) NOT NULL, status VARCHAR(50) NOT NULL, owner_id UUID REFERENCES users(id), converted_customer_id UUID REFERENCES customers(id), created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, version BIGINT NOT NULL DEFAULT 0);
+CREATE TABLE pipelines (id UUID PRIMARY KEY, name VARCHAR(100) NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE);
+CREATE TABLE pipeline_stages (id UUID PRIMARY KEY, pipeline_id UUID NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE, name VARCHAR(100) NOT NULL, position INT NOT NULL, closing_probability INT NOT NULL DEFAULT 0, UNIQUE(pipeline_id, position));
+CREATE TABLE opportunities (id UUID PRIMARY KEY, name VARCHAR(180) NOT NULL, customer_id UUID REFERENCES customers(id), lead_id UUID REFERENCES leads(id), stage_id UUID NOT NULL REFERENCES pipeline_stages(id), owner_id UUID REFERENCES users(id), value NUMERIC(15,2) NOT NULL DEFAULT 0, probability INT NOT NULL DEFAULT 0, expected_close_date DATE, priority VARCHAR(20) NOT NULL DEFAULT 'MEDIUM', status VARCHAR(20) NOT NULL DEFAULT 'OPEN', loss_reason VARCHAR(500), created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, version BIGINT NOT NULL DEFAULT 0);
+CREATE TABLE products (id UUID PRIMARY KEY, name VARCHAR(150) NOT NULL, category VARCHAR(100), price NUMERIC(15,2) NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE opportunity_products (id UUID PRIMARY KEY, opportunity_id UUID NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE, product_id UUID NOT NULL REFERENCES products(id), quantity INT NOT NULL, unit_price NUMERIC(15,2) NOT NULL, UNIQUE(opportunity_id,product_id));
+CREATE TABLE activities (id UUID PRIMARY KEY, type VARCHAR(30) NOT NULL, subject VARCHAR(180) NOT NULL, description TEXT, due_at TIMESTAMPTZ NOT NULL, completed_at TIMESTAMPTZ, customer_id UUID REFERENCES customers(id), lead_id UUID REFERENCES leads(id), opportunity_id UUID REFERENCES opportunities(id), owner_id UUID REFERENCES users(id), created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE audit_logs (id UUID PRIMARY KEY, entity_type VARCHAR(80) NOT NULL, entity_id UUID NOT NULL, action VARCHAR(30) NOT NULL, actor VARCHAR(180) NOT NULL, occurred_at TIMESTAMPTZ NOT NULL, changes JSONB);
+CREATE INDEX idx_customers_name ON customers (lower(name));
+CREATE INDEX idx_leads_status ON leads(status);
+CREATE INDEX idx_opportunities_stage ON opportunities(stage_id);
+CREATE INDEX idx_activities_due ON activities(due_at) WHERE completed_at IS NULL;
+CREATE INDEX idx_audit_entity ON audit_logs(entity_type,entity_id);
+
